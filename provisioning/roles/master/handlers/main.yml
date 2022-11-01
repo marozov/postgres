@@ -1,0 +1,6 @@
+---
+# handlers file for master
+- name: restart postgres
+  systemd:
+    name: postgresql-14.service
+    state: restarted

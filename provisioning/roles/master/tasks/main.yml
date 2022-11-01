@@ -1,0 +1,108 @@
+---
+# tasks file for master
+- name: add reps
+  yum:
+    name: 
+      - http://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+      - epel-*
+    state: latest
+
+- name: install packets
+  yum:
+    name: 
+      - postgresql14-server
+      - python-psycopg2
+      - barman-cli
+    state: latest
+
+- name: "Find out if PostgreSQL is initialized"
+  ansible.builtin.stat:
+    path: "/var/lib/pgsql/14/data/pg_hba.conf"
+  register: postgres_data
+
+- name: "Initialize PostgreSQL"
+  become: yes
+  become_user: postgres
+  shell: "/usr/pgsql-14/bin/pg_ctl initdb -D /var/lib/pgsql/14/data"
+  when: not postgres_data.stat.exists
+
+- name: copy pssql confs files
+  copy:
+    src: '{{item}}'
+    dest: '/var/lib/pgsql/14/data/'
+    owner: postgres
+    group: postgres
+  loop:
+    - pg_hba.conf
+    - postgresql.conf
+  notify:
+    - restart postgres
+
+- name: "Start and enable services"
+  systemd:
+    name: postgresql-14.service
+    state: started
+    enabled: yes
+
+- name: "Create app database"
+  postgresql_db:
+    state: present
+    name: "{{ db_name }}"
+  become: yes
+  become_user: postgres
+
+- name: Create Repl role
+  postgresql_user:
+    name: "{{ stream_user }}"
+    password: "{{ stream_password }}"
+    role_attr_flags: REPLICATION
+  become: yes
+  become_user: postgres
+
+- name: Create barman user
+  postgresql_user:
+    name: "{{ barman_stream_user }}"
+    password: "{{ barman_stream_password }}"
+    role_attr_flags: SUPERUSER
+  become: yes
+  become_user: postgres
+
+- name: "Create db user"
+  postgresql_user:
+    state: present
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+  become: yes
+  become_user: postgres
+
+- name: "Grant db user access to app db"
+  postgresql_privs:
+    type: database
+    database: "{{ db_name }}"
+    roles: "{{ db_user }}"
+    grant_option: no
+    privs: all
+  become: yes
+  become_user: postgres
+
+- name: Create physical_one physical slot if doesn't exist
+  become_user: postgres
+  postgresql_slot:
+    slot_name: slave
+    db: testotus
+
+- name: Create barman physical slot if doesn't exist
+  become_user: postgres
+  postgresql_slot:
+    slot_name: barman
+    db: testotus
+
+- name: "Add pgsql bin dir to system-wide $PATH"
+  copy:
+    dest: /etc/profile.d/custom-path.sh
+    content: 'PATH=$PATH:/usr/pgsql-14/bin/'
+
+# - name: Add to path user postgres
+#   shell: "export PATH=/usr/pgsql-14/bin/:$PATH"
+#   become: yes
+#   become_user: postgres

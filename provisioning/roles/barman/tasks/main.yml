@@ -1,0 +1,53 @@
+---
+# tasks file for master
+- name: add reps
+  yum:
+    name: 
+      - http://download.postgresql.org/pub/repos/yum/reporpms/EL-7-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+      - epel-*
+    state: latest
+
+- name: install package
+  yum:
+    name:
+      - postgresql14
+      - barman
+      - barman-cli
+    state: latest
+  
+- name: copy pgpass  
+  copy:  
+    src: .pgpass
+    dest: /var/lib/barman/
+    mode: '0600'
+    owner: barman
+    group: barman
+
+- name: copy barman conf
+  copy:
+    src: barman.conf
+    dest: /etc/
+    owner: barman
+    group: barman
+
+- name: copy master pgsql srv conf
+  copy: 
+    src: master.conf
+    dest: /etc/barman.d/
+    owner: barman
+    group: barman
+
+- name: "Add pgsql bin dir to system-wide $PATH"
+  copy:
+    dest: /etc/profile.d/custom-path.sh
+    content: 'PATH=$PATH:/usr/pgsql-14/bin/'
+
+# - name: Add to path user barman
+#   shell: "export PATH=/usr/pgsql-14/bin/:$PATH"
+#   become: yes
+#   become_user: barman
+
+- name: Start barman archiver
+  shell: barman cron
+  become: yes
+  become_user: barman

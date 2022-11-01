@@ -1,0 +1,16 @@
+---
+- name: master
+  hosts: master
+  become: true
+  roles:
+    - master
+- name: slave
+  hosts: slave
+  become: true
+  roles:
+    - slave
+- name: barman
+  hosts: ansiblecontroller
+  become: true
+  roles:
+    - barman
